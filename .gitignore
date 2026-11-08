@@ -1,0 +1,31 @@
+# Local Python environments and caches
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+
+# Local downloads, environment files and browser automation profiles
+data/raw/
+.env
+.env.*
+!.env.example
+.browser-profile/
+**/.browser-profile/
+**/browser-profile*/
+**/chrome-profile*/
+**/profile-*/
+docs/screenshots/profile*/
+**/screenshots-cache/
+**/screenshot-cache/
+.cache/screenshots/
+playwright-report/
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/

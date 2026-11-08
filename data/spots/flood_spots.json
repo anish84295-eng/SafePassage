@@ -1,0 +1,10 @@
+[
+  {"name": "Hindmata", "lat": 19.013, "lng": 72.842, "radius_m": 700},
+  {"name": "King's Circle", "lat": 19.027, "lng": 72.856, "radius_m": 600},
+  {"name": "Sion Circle", "lat": 19.043, "lng": 72.862, "radius_m": 600},
+  {"name": "Milan Subway", "lat": 19.103, "lng": 72.837, "radius_m": 600},
+  {"name": "Andheri Subway", "lat": 19.119, "lng": 72.846, "radius_m": 700},
+  {"name": "Dahisar Check Naka", "lat": 19.255, "lng": 72.868, "radius_m": 700},
+  {"name": "Kurla Station area", "lat": 19.072, "lng": 72.879, "radius_m": 700},
+  {"name": "Bandra-Kurla Complex low-lying roads", "lat": 19.066, "lng": 72.868, "radius_m": 700}
+]

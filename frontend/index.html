@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10151d">
+  <title>SafePassage — Mumbai emergency routing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/styles.css?v=20261108-polish-5">
+</head>
+<body>
+  <main class="app-shell">
+    <div id="map" aria-label="Interactive Mumbai routing map"></div>
+    <header class="topbar glass">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">S</span><span>SafePassage</span><small>EMERGENCY ROUTING</small></div>
+      <div class="search-wrap">
+        <label class="sr-only" for="search">Search roads and places</label>
+        <input id="search" autocomplete="off" placeholder="Search a road or place" aria-label="Search a road or place">
+        <div id="suggestions" class="suggestions" role="listbox"></div>
+      </div>
+      <div class="top-actions"><span class="live"><i></i> ROUTING ONLINE</span><button id="theme-toggle" class="icon-button" aria-label="Toggle light and dark theme" title="Toggle theme">◐</button></div>
+    </header>
+
+    <section class="control-panel glass" aria-label="Route planner">
+      <div class="panel-heading"><div><p class="eyebrow">MUMBAI · FLOOD AWARE</p><h1>Plan a safer route</h1></div><div class="panel-heading-actions"><button id="planner-collapse" class="text-button" aria-expanded="true" aria-controls="planner-controls">Hide controls</button><button id="clear-button" class="text-button">Clear</button></div></div>
+      <div id="result-card" class="result-card hidden" aria-live="polite"></div>
+      <button id="legend-toggle" class="legend-toggle" type="button" aria-expanded="false">Legend</button>
+      <div class="map-legend mobile-legend glass hidden"><span><i class="legend-line safe-line"></i> Safest</span><span><i class="legend-line alt-line"></i> Alternative</span><span><i class="legend-dot"></i> Hospital</span></div>
+      <div id="error-card" class="error-card hidden" role="alert"></div>
+      <div id="planner-controls">
+      <div class="place-row"><span class="place-dot origin-dot"></span><div><label for="origin-label">ORIGIN</label><button id="origin-label" class="place-value">Click the map to choose</button></div><button id="set-origin" class="tiny-action" aria-label="Set origin from map">↖</button></div>
+      <div class="place-connector"></div>
+      <div class="place-row"><span class="place-dot destination-dot"></span><div><label for="destination-label">DESTINATION</label><button id="destination-label" class="place-value">Click the map to choose</button></div><button id="set-destination" class="tiny-action" aria-label="Set destination from map">↖</button></div>
+
+      <div class="section-label">CONDITIONS</div>
+      <div class="condition-toggles">
+        <label><input id="rain-toggle" type="checkbox"> <span>Rain</span></label>
+        <label><input id="closures-toggle" type="checkbox"> <span>Road closures</span></label>
+      </div>
+      <div class="preset-row" role="group" aria-label="Condition presets">
+        <button data-preset="normal" class="selected">Normal</button>
+        <button data-preset="heavy_rain">Heavy rain</button>
+        <button data-preset="road_closed">Closures</button>
+      </div>
+      <div id="closure-tools" class="closure-tools hidden">
+        <div class="range-line"><label for="closure-radius">Closure radius</label><output id="radius-output">300 m</output></div>
+        <input id="closure-radius" type="range" min="100" max="1000" step="50" value="300">
+        <p class="hint">Click the map to mark a closure. Up to 5 circles.</p><div id="closure-list"></div>
+      </div>
+
+      <p id="route-hint" class="route-hint">Set a start and destination on the map</p>
+      <button id="example-button" class="example-button" type="button">Try an example</button>
+      <p id="empty-hint" class="empty-hint">Click the map to set a start point.</p>
+      <div class="map-toggles">
+        <label><input id="flood-toggle" type="checkbox" checked> <span class="toggle-icon flood-icon">≈</span> Flood zones</label>
+        <label><input id="hospital-toggle" type="checkbox"> <span class="toggle-icon hospital-icon">✚</span> Hospitals</label>
+      </div>
+      <p class="illustrative-note">Flood zones are illustrative, approximate and not official data.</p>
+      </div>
+      <div class="panel-actions"><button id="route-button" class="primary-button" disabled title="Set a start and destination on the map" aria-label="Find safest route. Set a start and destination on the map" aria-describedby="route-hint"><svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19 9 5l6 14 5-14"/><circle cx="9" cy="5" r="2"/><circle cx="15" cy="19" r="2"/></svg> Find safest route</button><button id="nearest-button" class="secondary-button"><span aria-hidden="true">+</span> Hospital</button></div>
+    </section>
+
+    <section class="algorithm-panel glass" aria-label="Algorithm comparison">
+      <div class="algorithm-head"><div><p class="eyebrow">SEARCH VISUALIZER</p><h2>Algorithm view</h2></div><button id="algorithm-toggle" class="switch" role="switch" aria-checked="false" aria-label="Toggle algorithm view"><span></span></button></div>
+      <div id="algorithm-content" class="hidden">
+        <div class="algorithm-tabs" role="tablist"><button class="selected" data-algorithm="astar">A*</button><button data-algorithm="dijkstra">Dijkstra</button><button data-algorithm="bfs">BFS</button></div>
+        <div id="algorithm-stats" class="stats-strip">Run a route to compare search behavior.</div>
+        <div class="playback"><button id="play-button" aria-label="Play visited nodes">▶</button><button id="replay-button" aria-label="Replay visited nodes">↺</button><input id="speed-slider" type="range" min="1" max="10" value="5" aria-label="Animation speed"><span id="speed-label">1×</span></div>
+      </div>
+    </section>
+
+    <div class="map-legend desktop-legend glass"><span><i class="legend-line safe-line"></i> Safest</span><span><i class="legend-line alt-line"></i> Alternative</span><span><i class="legend-dot"></i> Hospital</span></div>
+
+    <button id="recenter-button" class="recenter-button glass" aria-label="Re-center map on the original Mumbai view" title="Re-center on Mumbai"><span aria-hidden="true">⌖</span> Re-center</button>
+    <footer class="map-credit glass"><strong>SafePassage</strong><span id="attribution">© OpenStreetMap contributors</span></footer>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module" src="/static/app.js?v=20261108-polish-4"></script>
+</body>
+</html>
