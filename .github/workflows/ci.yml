@@ -38,3 +38,23 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image without publishing
         run: docker build --tag safepassage:ci .
+      - name: Smoke test container health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_id="$(docker run --detach --publish 8000:8000 safepassage:ci)"
+          cleanup() {
+            docker stop "$container_id" >/dev/null 2>&1 || true
+            docker rm "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          deadline=$((SECONDS + 60))
+          until curl --fail --silent http://127.0.0.1:8000/api/health | grep -Fxq '{"status":"ok"}'; do
+            if (( SECONDS >= deadline )); then
+              echo "Container health endpoint did not become ready within 60 seconds."
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done

@@ -56,7 +56,7 @@ def machine_info() -> dict[str, Any]:
     memory = MemoryStatus()
     memory.dwLength = ctypes.sizeof(MemoryStatus)
     ram_gb = None
-    if hasattr(ctypes, "windll") and ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory)):
+    if sys.platform == "win32" and ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(memory)):
         ram_gb = round(memory.ullTotalPhys / (1024 ** 3), 2)
     cpu_name = platform.processor()
     if os.name == "nt":

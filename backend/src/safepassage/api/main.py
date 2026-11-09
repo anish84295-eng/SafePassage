@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import os
-import ctypes
 import logging
-from ctypes import wintypes
+import sys
 from pathlib import Path
 from time import perf_counter
 from typing import AsyncIterator
@@ -47,8 +46,9 @@ def create_app(state: AppState | None = None) -> FastAPI:
         app.state.service_state = state if state is not None else load_state()
         elapsed = (perf_counter() - started) * 1000
         rss_mb = _process_rss_mb()
-        logging.getLogger("uvicorn.error").info("SafePassage startup ready in %.1f ms; process RSS %.1f MiB", elapsed, rss_mb)
-        app.state.startup_metrics = {"startup_ms": round(elapsed, 1), "rss_mb": round(rss_mb, 1)}
+        rss_text = f"{rss_mb:.1f} MiB" if rss_mb is not None else "unavailable"
+        logging.getLogger("uvicorn.error").info("SafePassage startup ready in %.1f ms; process RSS %s", elapsed, rss_text)
+        app.state.startup_metrics = {"startup_ms": round(elapsed, 1), "rss_mb": round(rss_mb, 1) if rss_mb is not None else None}
         yield
 
     app = FastAPI(
@@ -156,24 +156,58 @@ def create_app(state: AppState | None = None) -> FastAPI:
     return app
 
 
-def _process_rss_mb() -> float:
-    """Return current process RSS on Windows without a runtime dependency."""
-    class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
-        _fields_ = [("cb", ctypes.c_ulong), ("PageFaultCount", ctypes.c_ulong),
-                    ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
-                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                    ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
-    counters = PROCESS_MEMORY_COUNTERS()
-    counters.cb = ctypes.sizeof(counters)
-    kernel32 = ctypes.windll.kernel32
-    psapi = ctypes.windll.psapi
-    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
-    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
-    if psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
-        return counters.WorkingSetSize / (1024 * 1024)
-    return 0.0
+def _resource_rss_mb() -> float | None:
+    """Return peak RSS using the platform resource module, if available."""
+    try:
+        import resource
+
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # macOS reports bytes; Linux and the other supported Unix targets report KiB.
+        divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
+        return float(peak) / divisor
+    except Exception:
+        return None
+
+
+def _process_rss_mb() -> float | None:
+    """Return process RSS in MiB without allowing platform probes to break startup."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            from ctypes import wintypes
+
+            class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+                _fields_ = [("cb", ctypes.c_ulong), ("PageFaultCount", ctypes.c_ulong),
+                            ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                            ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
+
+            counters = PROCESS_MEMORY_COUNTERS()
+            counters.cb = ctypes.sizeof(counters)
+            kernel32 = ctypes.windll.kernel32
+            psapi = ctypes.windll.psapi
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            if psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+                return counters.WorkingSetSize / (1024 * 1024)
+            return None
+
+        if sys.platform.startswith("linux"):
+            try:
+                for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+                    if line.startswith("VmRSS:"):
+                        return float(line.split()[1]) / 1024
+            except Exception:
+                pass
+            return _resource_rss_mb()
+
+        if sys.platform == "darwin":
+            return _resource_rss_mb()
+        return None
+    except Exception:
+        return None
 
 
 app = create_app()
