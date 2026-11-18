@@ -1,16 +1,20 @@
 const $ = (selector) => document.querySelector(selector);
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-const map = L.map("map", { preferCanvas: true, zoomControl: false, maxBoundsViscosity: 0.85 }).setView([19.12, 72.845], 12);
+const map = L.map("map", { preferCanvas: true, zoomControl: false, attributionControl: false, maxBoundsViscosity: 0.85 }).setView([19.12, 72.845], 12);
 L.control.zoom({ position: "topright" }).addTo(map);
 
 const state = {
   meta: null, origin: null, destination: null, originLabel: "", destinationLabel: "",
-  scenario: "normal", rainEnabled: false, closuresEnabled: false, plannerCollapsed: false, algorithm: "astar",
+  scenario: "normal", rainEnabled: false, closuresEnabled: false, plannerCollapsed: false, sheetState: "peek", algorithm: "astar",
   closures: [], routeLayers: [], routeHighlights: [], markers: [], floodLayers: [], hospitalLayers: [], activeHospitalLayers: [], hospitalData: [], dots: null,
   compare: null, selectedRoute: 0, placing: "origin", requestController: null,
   theme: "dark", animation: null, currentTile: null, originalBounds: null, tileConfig: null,
 };
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const phoneLayout = window.matchMedia("(max-width: 600px)");
+const touchInput = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+const mapAction = touchInput ? "Tap" : "Click";
+if (touchInput) $("#closure-tools .hint").textContent = "Tap the map to mark a closure. Up to 5 circles.";
 
 function showToast(message) {
   const toast = $("#toast"); toast.textContent = message; toast.classList.add("show");
@@ -18,11 +22,65 @@ function showToast(message) {
 }
 function clearError() { $("#error-card").classList.add("hidden"); }
 function setPlannerCollapsed(collapsed) {
+  if (phoneLayout.matches) {
+    state.plannerCollapsed = collapsed;
+    setSheetState(collapsed ? "half" : "full");
+    return;
+  }
   state.plannerCollapsed = collapsed;
   $("#planner-controls").classList.toggle("hidden", collapsed);
   $("#planner-collapse").setAttribute("aria-expanded", String(!collapsed));
   $("#planner-collapse").textContent = collapsed ? "Show controls" : "Hide controls";
 }
+function setSheetState(next) {
+  state.sheetState = next;
+  const panel = $("#control-panel");
+  panel.classList.remove("sheet-peek", "sheet-half", "sheet-full");
+  panel.classList.add(`sheet-${next}`);
+  document.body.dataset.sheetState = next;
+  $("#planner-controls").classList.remove("hidden");
+  const full = next === "full";
+  $("#planner-collapse").setAttribute("aria-expanded", String(full));
+  $("#planner-collapse").textContent = full ? "Half" : "Full controls";
+  $("#sheet-handle").setAttribute("aria-label", `Route sheet: ${next}. Tap to change size`);
+  syncMobileMapActions();
+  map.invalidateSize({ pan: false });
+}
+function syncMobileMapActions() {
+  const algorithmOn = $("#algorithm-toggle")?.getAttribute("aria-checked") === "true";
+  $("#mobile-algorithm-toggle")?.setAttribute("aria-pressed", String(algorithmOn));
+  $("#mobile-flood-toggle")?.setAttribute("aria-pressed", String(Boolean($("#flood-toggle")?.checked)));
+  $("#mobile-hospital-toggle")?.setAttribute("aria-pressed", String(Boolean($("#hospital-toggle")?.checked)));
+}
+if (phoneLayout.matches) setSheetState("peek");
+else setPlannerCollapsed(false);
+phoneLayout.addEventListener("change", (event) => {
+  if (event.matches) setSheetState(state.destination ? "half" : "peek");
+  else { document.body.dataset.sheetState = "desktop"; $("#control-panel").classList.remove("sheet-peek", "sheet-half", "sheet-full"); setPlannerCollapsed(false); }
+  if (state.meta) $("#attribution").textContent = event.matches ? "© OpenStreetMap contributors" : state.meta.data_attribution;
+});
+
+let sheetPointerY = null;
+let sheetWasDragged = false;
+$("#sheet-handle").addEventListener("pointerdown", (event) => {
+  sheetPointerY = event.clientY;
+  event.currentTarget.setPointerCapture(event.pointerId);
+});
+$("#sheet-handle").addEventListener("pointerup", (event) => {
+  if (sheetPointerY === null) return;
+  const delta = sheetPointerY - event.clientY;
+  sheetPointerY = null;
+  if (Math.abs(delta) <= 45) return;
+  sheetWasDragged = true;
+  if (delta > 45) setSheetState(state.sheetState === "peek" ? (delta > 110 ? "full" : "half") : "full");
+  else setSheetState(state.sheetState === "full" ? (delta < -110 ? "peek" : "half") : "peek");
+});
+$("#sheet-handle").addEventListener("pointercancel", () => { sheetPointerY = null; });
+$("#sheet-handle").addEventListener("click", () => {
+  if (sheetWasDragged) { sheetWasDragged = false; return; }
+  const order = ["peek", "half", "full"];
+  setSheetState(order[(order.indexOf(state.sheetState) + 1) % order.length]);
+});
 function refreshConditionControls() {
   state.scenario = state.rainEnabled ? "heavy_rain" : state.closuresEnabled ? "road_closed" : "normal";
   $("#rain-toggle").checked = state.rainEnabled;
@@ -82,14 +140,15 @@ function clearRouteLayers() {
   if (state.animation) { cancelAnimationFrame(state.animation); clearTimeout(state.animation); }
 }
 function updatePlaceLabels() {
-  $("#origin-label").textContent = state.origin ? `${state.origin.lat.toFixed(5)}, ${state.origin.lng.toFixed(5)}${state.originLabel ? ` · near ${state.originLabel}` : ""}` : "Click the map to choose";
-  $("#destination-label").textContent = state.destination ? `${state.destination.lat.toFixed(5)}, ${state.destination.lng.toFixed(5)}${state.destinationLabel ? ` · near ${state.destinationLabel}` : ""}` : "Click the map to choose";
+  $("#origin-label").textContent = state.origin ? `${state.origin.lat.toFixed(5)}, ${state.origin.lng.toFixed(5)}${state.originLabel ? ` · near ${state.originLabel}` : ""}` : `${mapAction} the map to choose`;
+  $("#destination-label").textContent = state.destination ? `${state.destination.lat.toFixed(5)}, ${state.destination.lng.toFixed(5)}${state.destinationLabel ? ` · near ${state.destinationLabel}` : ""}` : `${mapAction} the map to choose`;
   $("#route-button").disabled = !(state.origin && state.destination);
   const routeReady = Boolean(state.origin && state.destination);
   const routeHint = routeReady ? "Start and destination are set. Ready to find a route." : "Set a start and destination on the map";
   $("#route-hint").textContent = routeHint;
   $("#route-button").title = routeHint;
   $("#route-button").setAttribute("aria-label", `Find safest route. ${routeHint}`);
+  $("#empty-hint").textContent = `${mapAction} the map to set a start point.`;
   $("#empty-hint").classList.toggle("hidden", Boolean(state.origin));
   [state.origin, state.destination].forEach((point, index) => {
     if (!point) return;
@@ -104,9 +163,11 @@ function updatePlaceLabels() {
     state.markers.push(pin);
   });
 }
+updatePlaceLabels();
 function setPlace(which, point) {
   if (which === "origin") { state.origin = point; state.originLabel = ""; }
   else { state.destination = point; state.destinationLabel = ""; }
+  if (phoneLayout.matches && which === "destination") setSheetState("half");
   clearRouteLayers(); updatePlaceLabels(); drawClosures();
 }
 function drawClosures() {
@@ -380,7 +441,8 @@ function showClosureToast(message) {
 }
 function resetAll() {
   state.origin = null; state.destination = null; state.originLabel = ""; state.destinationLabel = ""; state.latestRoute = null;
-  clearRouteLayers(); updatePlaceLabels(); $("#result-card").classList.add("hidden"); clearError(); setPlannerCollapsed(false);
+  clearRouteLayers(); updatePlaceLabels(); $("#result-card").classList.add("hidden"); clearError();
+  if (phoneLayout.matches) setSheetState("peek"); else setPlannerCollapsed(false);
 }
 map.on("click", (event) => {
   const point = pointFromEvent(event);
@@ -393,14 +455,20 @@ map.on("click", (event) => {
 });
 map.createPane("searchPane"); map.getPane("searchPane").style.zIndex = 350;
 map.on("zoomend", () => { if ($("#hospital-toggle").checked) renderHospitalMarkers(); });
-$("#set-origin").addEventListener("click", () => { state.placing = "origin"; showToast("Click the map to set the origin."); });
-$("#set-destination").addEventListener("click", () => { state.placing = "destination"; showToast("Click the map to set the destination."); });
-$("#origin-label").addEventListener("click", () => { state.placing = "origin"; showToast("Click the map to set the origin."); });
-$("#destination-label").addEventListener("click", () => { state.placing = "destination"; showToast("Click the map to set the destination."); });
+$("#set-origin").addEventListener("click", () => { state.placing = "origin"; showToast(`${mapAction} the map to set the origin.`); });
+$("#set-destination").addEventListener("click", () => { state.placing = "destination"; showToast(`${mapAction} the map to set the destination.`); });
+$("#origin-label").addEventListener("click", () => { state.placing = "origin"; showToast(`${mapAction} the map to set the origin.`); });
+$("#destination-label").addEventListener("click", () => { state.placing = "destination"; showToast(`${mapAction} the map to set the destination.`); });
 $("#route-button").addEventListener("click", findRoute);
 $("#recenter-button").addEventListener("click", () => {
   if (state.originalBounds) map.fitBounds(state.originalBounds);
 });
+$("#mobile-recenter-button").addEventListener("click", () => {
+  if (state.originalBounds) map.fitBounds(state.originalBounds);
+});
+$("#mobile-algorithm-toggle").addEventListener("click", () => $("#algorithm-toggle").click());
+$("#mobile-flood-toggle").addEventListener("click", () => $("#flood-toggle").click());
+$("#mobile-hospital-toggle").addEventListener("click", () => $("#hospital-toggle").click());
 $("#nearest-button").addEventListener("click", findNearest);
 $("#example-button").addEventListener("click", () => {
   if (state.requestController) state.requestController.abort();
@@ -412,7 +480,10 @@ $("#example-button").addEventListener("click", () => {
   findRoute();
 });
 $("#clear-button").addEventListener("click", () => { resetAll(); state.closures = []; drawClosures(); });
-$("#planner-collapse").addEventListener("click", () => setPlannerCollapsed(!state.plannerCollapsed));
+$("#planner-collapse").addEventListener("click", () => {
+  if (phoneLayout.matches) setSheetState(state.sheetState === "full" ? "half" : "full");
+  else setPlannerCollapsed(!state.plannerCollapsed);
+});
 $("#rain-toggle").addEventListener("change", (event) => { state.rainEnabled = event.target.checked; refreshConditionControls(); refreshPresetSelection(); });
 $("#closures-toggle").addEventListener("change", (event) => { state.closuresEnabled = event.target.checked; refreshConditionControls(); refreshPresetSelection(); });
 $("#closure-radius").addEventListener("input", (event) => { $("#radius-output").value = `${event.target.value} m`; });
@@ -424,12 +495,13 @@ document.querySelectorAll("[data-preset]").forEach((button) => button.addEventLi
   refreshConditionControls();
   refreshPresetSelection();
 }));
-$("#flood-toggle").addEventListener("change", (event) => state.floodLayers.forEach((layer) => event.target.checked ? layer.addTo(map) : map.removeLayer(layer)));
-$("#hospital-toggle").addEventListener("change", toggleHospitals);
+$("#flood-toggle").addEventListener("change", (event) => { state.floodLayers.forEach((layer) => event.target.checked ? layer.addTo(map) : map.removeLayer(layer)); syncMobileMapActions(); });
+$("#hospital-toggle").addEventListener("change", (event) => { toggleHospitals(event); syncMobileMapActions(); });
 $("#theme-toggle").addEventListener("click", () => setTheme(state.theme === "dark" ? "light" : "dark"));
 $("#algorithm-toggle").addEventListener("click", async (event) => {
   const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
   event.currentTarget.setAttribute("aria-checked", String(enabled)); $("#algorithm-content").classList.toggle("hidden", !enabled);
+  syncMobileMapActions();
   if (enabled) await runCompare(); else {
     if (state.animation) { cancelAnimationFrame(state.animation); clearTimeout(state.animation); state.animation = null; }
     if (state.dotLayers) { state.dotLayers.forEach((layer) => map.removeLayer(layer)); state.dotLayers = []; }
@@ -488,7 +560,7 @@ async function initialize() {
     map.fitBounds(state.originalBounds);
     refreshTiles();
     $("#empty-hint").classList.toggle("hidden", Boolean(state.origin));
-    $("#attribution").textContent = meta.data_attribution; drawZones(zones.zones);
+    $("#attribution").textContent = phoneLayout.matches ? "© OpenStreetMap contributors" : meta.data_attribution; drawZones(zones.zones);
   } catch (error) { errorMessage(error); }
 }
 initialize();
