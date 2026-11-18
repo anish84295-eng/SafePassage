@@ -4,7 +4,7 @@
   
 ## Live demo
 
-[Open SafePassage]()
+[Open SafePassage](https://safepassage-uv28.onrender.com)
 
 On free hosting, the first request can take up to 1 minute while the service wakes up.
 

@@ -140,6 +140,7 @@ input,select,textarea{color:var(--text)}
   .control-panel.sheet-half{height:calc(50dvh + env(safe-area-inset-bottom));max-height:calc(100dvh - env(safe-area-inset-top) - 64px)}
   .control-panel.sheet-full{height:calc(100dvh - env(safe-area-inset-top) - 64px);max-height:calc(100dvh - env(safe-area-inset-top) - 64px)}
   .sheet-handle{display:flex;flex:0 0 25px;align-items:center;justify-content:center;width:100%;padding:0;border:0;background:transparent;touch-action:none;cursor:grab}
+  .sheet-handle,.control-panel label,.control-panel button,.mobile-map-actions button{user-select:none;-webkit-user-select:none}
   .sheet-handle span{display:block;width:38px;height:4px;border-radius:4px;background:var(--muted);opacity:.72}
   .sheet-scroll{display:flex;flex:1 1 auto;min-height:0;flex-direction:column;gap:9px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding:0 0 calc(10px + env(safe-area-inset-bottom))}
   .sheet-scroll::-webkit-scrollbar{display:none}

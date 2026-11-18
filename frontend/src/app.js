@@ -11,8 +11,8 @@ const state = {
   theme: "dark", animation: null, currentTile: null, originalBounds: null, tileConfig: null,
 };
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const phoneLayout = window.matchMedia("(max-width: 600px)");
-const touchInput = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
+const phoneLayout = window.matchMedia("(max-width: 760px)");
+const touchInput = window.matchMedia("(pointer: coarse)").matches;
 const mapAction = touchInput ? "Tap" : "Click";
 if (touchInput) $("#closure-tools .hint").textContent = "Tap the map to mark a closure. Up to 5 circles.";
 
@@ -48,15 +48,31 @@ function setSheetState(next) {
 }
 function syncMobileMapActions() {
   const algorithmOn = $("#algorithm-toggle")?.getAttribute("aria-checked") === "true";
-  $("#mobile-algorithm-toggle")?.setAttribute("aria-pressed", String(algorithmOn));
-  $("#mobile-flood-toggle")?.setAttribute("aria-pressed", String(Boolean($("#flood-toggle")?.checked)));
-  $("#mobile-hospital-toggle")?.setAttribute("aria-pressed", String(Boolean($("#hospital-toggle")?.checked)));
+  const states = [
+    ["#mobile-algorithm-toggle", algorithmOn, "Algorithm view"],
+    ["#mobile-flood-toggle", Boolean($("#flood-toggle")?.checked), "Flood zones"],
+    ["#mobile-hospital-toggle", Boolean($("#hospital-toggle")?.checked), "Hospitals"],
+  ];
+  states.forEach(([selector, active, label]) => {
+    const button = $(selector);
+    button?.setAttribute("aria-pressed", String(active));
+    button?.setAttribute("aria-label", `${label}: ${active ? "on" : "off"}`);
+    button?.setAttribute("title", `${label}: ${active ? "on" : "off"}`);
+  });
+}
+function fitOriginalBounds() {
+  if (!state.originalBounds) return;
+  if (phoneLayout.matches) {
+    const sheetHeight = window.innerHeight * 140 / 844;
+    map.fitBounds(state.originalBounds, { paddingTopLeft: [16, 74], paddingBottomRight: [16, sheetHeight + 12], maxZoom: 13 });
+  } else map.fitBounds(state.originalBounds);
 }
 if (phoneLayout.matches) setSheetState("peek");
 else setPlannerCollapsed(false);
 phoneLayout.addEventListener("change", (event) => {
   if (event.matches) setSheetState(state.destination ? "half" : "peek");
   else { document.body.dataset.sheetState = "desktop"; $("#control-panel").classList.remove("sheet-peek", "sheet-half", "sheet-full"); setPlannerCollapsed(false); }
+  fitOriginalBounds();
   if (state.meta) $("#attribution").textContent = event.matches ? "© OpenStreetMap contributors" : state.meta.data_attribution;
 });
 
@@ -461,10 +477,10 @@ $("#origin-label").addEventListener("click", () => { state.placing = "origin"; s
 $("#destination-label").addEventListener("click", () => { state.placing = "destination"; showToast(`${mapAction} the map to set the destination.`); });
 $("#route-button").addEventListener("click", findRoute);
 $("#recenter-button").addEventListener("click", () => {
-  if (state.originalBounds) map.fitBounds(state.originalBounds);
+  fitOriginalBounds();
 });
 $("#mobile-recenter-button").addEventListener("click", () => {
-  if (state.originalBounds) map.fitBounds(state.originalBounds);
+  fitOriginalBounds();
 });
 $("#mobile-algorithm-toggle").addEventListener("click", () => $("#algorithm-toggle").click());
 $("#mobile-flood-toggle").addEventListener("click", () => $("#flood-toggle").click());
@@ -557,7 +573,7 @@ async function initialize() {
     map.setMaxBounds(L.latLngBounds([south - margin, west - margin], [north + margin, east + margin]));
     map.setMinZoom(11);
     map.on("drag", () => map.panInsideBounds(map.options.maxBounds, { animate: false }));
-    map.fitBounds(state.originalBounds);
+    fitOriginalBounds();
     refreshTiles();
     $("#empty-hint").classList.toggle("hidden", Boolean(state.origin));
     $("#attribution").textContent = phoneLayout.matches ? "© OpenStreetMap contributors" : meta.data_attribution; drawZones(zones.zones);
