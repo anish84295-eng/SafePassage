@@ -17,5 +17,4 @@ COPY data/spots /app/data/spots
 USER appuser
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD-SHELL python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/api/health', timeout=3)" || exit 1
-CMD ["sh", "-c", "exec python -m uvicorn safepassage.api.main:app --app-dir /app/backend/src --host 0.0.0.0 --port \"${PORT:-8000}\""]
+  CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/api/health', timeout=3)"
