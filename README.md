@@ -2,6 +2,12 @@
   
   [![CI](https://github.com/anish84295-eng/SafePassage/actions/workflows/ci.yml/badge.svg)](https://github.com/anish84295-eng/SafePassage/actions/workflows/ci.yml)
   
+## Live demo
+
+[Open SafePassage]()
+
+On free hosting, the first request can take up to 1 minute while the service wakes up.
+
 SafePassage is a flood-aware emergency routing demo for Mumbai, built on a real OpenStreetMap road extract. It explores how route recommendations change when roads are flood-affected or closed. The project implements core data structures and graph algorithms from scratch to make those tradeoffs visible and measurable.
 
 ## Highlights

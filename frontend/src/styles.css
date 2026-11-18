@@ -19,6 +19,7 @@
 .leaflet-control-zoom a{background:var(--panel-solid)!important;color:var(--text)!important;border-color:var(--border)!important}
 .map-legend{right:auto;left:16px;bottom:46px;display:flex;gap:12px;padding:9px 11px;background:var(--panel-solid);color:var(--text);border-radius:11px}
 .map-credit{left:16px;bottom:12px;border-radius:10px;background:var(--panel-solid)}
+.map-credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--panel-solid);color:var(--text)}
 .leaflet-popup-content{margin:11px 13px;line-height:1.45}
 .leaflet-container a.leaflet-popup-close-button{color:var(--muted)}
