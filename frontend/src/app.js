@@ -540,23 +540,52 @@ $("#speed-slider").addEventListener("input", (event) => { $("#speed-label").text
 
 let searchTimer;
 let searchController;
+let searchRequestId = 0;
+function closeSuggestions() {
+  clearTimeout(searchTimer);
+  searchRequestId += 1;
+  searchController?.abort();
+  searchController = null;
+  $("#suggestions").replaceChildren();
+}
+function syncSearchClear() {
+  $("#search-clear").hidden = !$("#search").value;
+}
 $("#search").addEventListener("input", () => {
   clearTimeout(searchTimer);
+  searchController?.abort();
+  searchController = null;
+  const query = $("#search").value.trim();
+  syncSearchClear();
+  if (!query) {
+    closeSuggestions();
+    return;
+  }
+  const requestId = ++searchRequestId;
   searchTimer = setTimeout(async () => {
-    if (searchController) searchController.abort();
     searchController = new AbortController();
     try {
-      const items = await api(`/api/search?q=${encodeURIComponent($("#search").value)}&limit=8`, { signal: searchController.signal });
+      const items = await api(`/api/search?q=${encodeURIComponent(query)}&limit=8`, { signal: searchController.signal });
+      if (requestId !== searchRequestId || !$("#search").value.trim()) return;
       $("#suggestions").innerHTML = items.map((item) => `<button role="option" data-lat="${item.lat}" data-lng="${item.lng}">${escapeHtml(item.name)}</button>`).join("");
-    } catch (error) { errorMessage(error); }
+    } catch (error) { if (error.name !== "AbortError" && requestId === searchRequestId) errorMessage(error); }
   }, 220);
+});
+$("#search-clear").addEventListener("click", () => {
+  $("#search").value = "";
+  syncSearchClear();
+  closeSuggestions();
+  $("#search").focus();
 });
 $("#suggestions").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-lat]"); if (!button) return;
   const point = { lat: Number(button.dataset.lat), lng: Number(button.dataset.lng) };
-  setPlace(state.placing, point); map.flyTo([point.lat, point.lng], 16); $("#suggestions").replaceChildren(); $("#search").value = button.textContent;
+  setPlace(state.placing, point); map.flyTo([point.lat, point.lng], 16); closeSuggestions(); $("#search").value = button.textContent; syncSearchClear();
 });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") $("#suggestions").replaceChildren(); });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeSuggestions(); });
+document.addEventListener("pointerdown", (event) => {
+  if (!$(".search-wrap").contains(event.target)) closeSuggestions();
+});
 
 async function initialize() {
   let savedTheme;

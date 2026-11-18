@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="/static/styles.css?v=20261118-map-first-1">
+  <link rel="stylesheet" href="/static/styles.css?v=20261118-search-fix-1">
 </head>
 <body>
   <main class="app-shell">
@@ -19,6 +19,7 @@
       <div class="search-wrap">
         <label class="sr-only" for="search">Search roads and places</label>
         <input id="search" autocomplete="off" placeholder="Search a road or place" aria-label="Search a road or place">
+        <button id="search-clear" class="search-clear" type="button" aria-label="Clear search" title="Clear search" hidden>×</button>
         <div id="suggestions" class="suggestions" role="listbox"></div>
       </div>
       <div class="top-actions"><span class="live"><i></i> ROUTING ONLINE</span><button id="theme-toggle" class="icon-button" aria-label="Toggle light and dark theme" title="Toggle theme">◐</button></div>
@@ -92,6 +93,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="/static/app.js?v=20261118-map-first-1"></script>
+  <script type="module" src="/static/app.js?v=20261118-search-fix-1"></script>
 </body>
 </html>
